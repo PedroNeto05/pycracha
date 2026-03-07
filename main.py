@@ -4,34 +4,33 @@ Gerador de Crachás ECRI
 Aplicativo desktop para gerenciar e gerar crachás a partir de arquivos modelo .docx
 """
 
-import copy
-import io
-import os
 import sys
+import os
+import copy
 import zipfile
-
+import io
 from lxml import etree
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLineEdit,
+    QLabel,
+    QScrollArea,
+    QFrame,
     QButtonGroup,
+    QRadioButton,
+    QGroupBox,
+    QFileDialog,
+    QMessageBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
-    QFrame,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMainWindow,
-    QMessageBox,
-    QPushButton,
-    QRadioButton,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
 )
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 CRACHAS_POR_PAGINA = 6
@@ -127,7 +126,7 @@ class NameCard(QFrame):
         num.setStyleSheet(f"color:{TEXT_MUTED};")
         lay.addWidget(num)
         lbl = QLabel(name)
-        lbl.setFont(QFont("Segoe UI", 10, QFont.Medium))
+        lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Medium))
         lbl.setStyleSheet(f"color:{TEXT_PRIMARY};")
         lay.addWidget(lbl, 1)
         for txt, bg, fg, cb in [
@@ -136,7 +135,7 @@ class NameCard(QFrame):
         ]:
             b = QPushButton(txt)
             b.setFixedSize(80, 30)
-            b.setCursor(Qt.PointingHandCursor)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(
                 f"QPushButton{{background:{bg};color:{fg};border:1px solid {fg};border-radius:6px;font-size:11px;font-weight:600;}}QPushButton:hover{{background:{fg};color:white;}}"
             )
@@ -157,13 +156,13 @@ class PageGroup(QWidget):
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(12, 0, 12, 0)
         l1 = QLabel(f"📄  Página {page_num}")
-        l1.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        l1.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         l1.setStyleSheet("color:white;")
         hl.addWidget(l1)
         l2 = QLabel(f"{len(names)} crachá{'s' if len(names)!=1 else ''}")
         l2.setFont(QFont("Segoe UI", 9))
         l2.setStyleSheet("color:rgba(255,255,255,0.8);")
-        l2.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        l2.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         hl.addWidget(l2)
         lay.addWidget(hdr)
         box = QFrame()
@@ -201,13 +200,13 @@ class GeradorCrachas(QMainWindow):
 
     def _sep(self):
         f = QFrame()
-        f.setFrameShape(QFrame.HLine)
+        f.setFrameShape(QFrame.Shape.HLine)
         f.setStyleSheet(f"color:{BORDER};")
         return f
 
     def _grpbox(self, title):
         gb = QGroupBox(title)
-        gb.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        gb.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         gb.setStyleSheet(
             f"QGroupBox{{color:{TEXT_PRIMARY};border:1px solid {BORDER};border-radius:8px;margin-top:10px;padding-top:8px;}}QGroupBox::title{{subcontrol-origin:margin;left:12px;padding:0 4px;}}"
         )
@@ -216,7 +215,7 @@ class GeradorCrachas(QMainWindow):
     def _btn(self, text, height, style, cb):
         b = QPushButton(text)
         b.setFixedHeight(height)
-        b.setCursor(Qt.PointingHandCursor)
+        b.setCursor(Qt.CursorShape.PointingHandCursor)
         b.setStyleSheet(style)
         b.clicked.connect(cb)
         return b
@@ -233,7 +232,7 @@ class GeradorCrachas(QMainWindow):
         lay.setSpacing(14)
 
         t = QLabel("🎪 Gerador de Crachás")
-        t.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        t.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         t.setStyleSheet(f"color:{TEXT_PRIMARY};")
         lay.addWidget(t)
         s = QLabel("ECRI – Encontro de Crianças com Cristo")
@@ -281,8 +280,8 @@ class GeradorCrachas(QMainWindow):
             sl.addWidget(lbl_st, 1)
             btn_load = QPushButton("📂 Carregar")
             btn_load.setFixedSize(94, 26)
-            btn_load.setCursor(Qt.PointingHandCursor)
-            btn_load.setFont(QFont("Segoe UI", 8, QFont.Bold))
+            btn_load.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_load.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
             btn_load.setStyleSheet(
                 f"QPushButton{{background:{ACCENT_LIGHT};color:{ACCENT};border:1px solid {ACCENT};border-radius:5px;}}QPushButton:hover{{background:{ACCENT};color:white;}}"
             )
@@ -292,7 +291,7 @@ class GeradorCrachas(QMainWindow):
 
             if i < len(COLOR_OPTIONS) - 1:
                 div = QFrame()
-                div.setFrameShape(QFrame.HLine)
+                div.setFrameShape(QFrame.Shape.HLine)
                 div.setStyleSheet(f"color:{BORDER};margin:2px 4px;")
                 gl.addWidget(div)
 
@@ -325,7 +324,7 @@ class GeradorCrachas(QMainWindow):
         self.count_lbl = QLabel("0 nomes adicionados")
         self.count_lbl.setFont(QFont("Segoe UI", 9))
         self.count_lbl.setStyleSheet(f"color:{TEXT_MUTED};")
-        self.count_lbl.setAlignment(Qt.AlignCenter)
+        self.count_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self.count_lbl)
 
         lay.addStretch()
@@ -361,18 +360,20 @@ class GeradorCrachas(QMainWindow):
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(20, 0, 20, 0)
         ht = QLabel("Visualização de Páginas")
-        ht.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        ht.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         ht.setStyleSheet(f"color:{TEXT_PRIMARY};")
         hl.addWidget(ht)
         self.page_count_lbl = QLabel("")
         self.page_count_lbl.setFont(QFont("Segoe UI", 9))
         self.page_count_lbl.setStyleSheet(f"color:{TEXT_MUTED};")
-        self.page_count_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.page_count_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         hl.addWidget(self.page_count_lbl, 1)
         lay.addWidget(hdr)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setStyleSheet(
             f"QScrollArea{{background:{BG_MAIN};}}QScrollBar:vertical{{width:8px;background:transparent;}}QScrollBar::handle:vertical{{background:{BORDER};border-radius:4px;min-height:20px;}}"
         )
@@ -463,14 +464,16 @@ class GeradorCrachas(QMainWindow):
         )
         edit.selectAll()
         lay.addWidget(edit)
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Ok).setText("Salvar")
-        btns.button(QDialogButtonBox.Cancel).setText("Cancelar")
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText("Salvar")
+        btns.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancelar")
         btns.accepted.connect(dlg.accept)
         btns.rejected.connect(dlg.reject)
         lay.addWidget(btns)
         edit.returnPressed.connect(dlg.accept)
-        if dlg.exec_() == QDialog.Accepted:
+        if dlg.exec() == QDialog.DialogCode.Accepted:
             new = edit.text().strip()
             if new:
                 self.names[idx] = new
@@ -488,9 +491,9 @@ class GeradorCrachas(QMainWindow):
                 self,
                 "Confirmar",
                 "Deseja remover todos os nomes?",
-                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
-            == QMessageBox.Yes
+            == QMessageBox.StandardButton.Yes
         ):
             self.names.clear()
             self._refresh()
@@ -528,17 +531,17 @@ class GeradorCrachas(QMainWindow):
                 item.widget().deleteLater()
         w = QWidget()
         vl = QVBoxLayout(w)
-        vl.setAlignment(Qt.AlignCenter)
+        vl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon = QLabel("📋")
         icon.setFont(QFont("Segoe UI", 40))
-        icon.setAlignment(Qt.AlignCenter)
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vl.addWidget(icon)
         msg = QLabel(
             "Nenhum nome adicionado ainda.\nDigite um nome à esquerda e pressione Enter ou clique em Adicionar."
         )
         msg.setFont(QFont("Segoe UI", 11))
         msg.setStyleSheet(f"color:{TEXT_MUTED};")
-        msg.setAlignment(Qt.AlignCenter)
+        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vl.addWidget(msg)
         self.scroll_lay.insertWidget(0, w)
 
@@ -589,7 +592,7 @@ def main():
     app.setStyle("Fusion")
     w = GeradorCrachas()
     w.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
