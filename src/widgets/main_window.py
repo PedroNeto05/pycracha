@@ -44,7 +44,6 @@ from widgets.page_group import PageGroup
 class GeradorCrachas(QMainWindow):
     def __init__(self, docx_service: DocxService):
         super().__init__()
-        self.names = []
         self.docx_service = docx_service
         self.templates = {}
         self.setWindowTitle("Gerador de Crachás ECRI")
@@ -306,7 +305,7 @@ class GeradorCrachas(QMainWindow):
         name = self.name_input.text().strip()
         if not name:
             return
-        self.names.append(name)
+        self.docx_service.add_name(name)
         self.name_input.clear()
         self.name_input.setFocus()
         self._refresh()
@@ -320,7 +319,7 @@ class GeradorCrachas(QMainWindow):
         lay.setContentsMargins(20, 20, 20, 20)
         lay.setSpacing(12)
         lay.addWidget(QLabel("Novo nome:"))
-        edit = QLineEdit(self.names[idx])
+        edit = QLineEdit(self.docx_service.names[idx])
         edit.setFixedHeight(36)
         edit.setFont(QFont("Segoe UI", 10))
         edit.setStyleSheet(
@@ -340,15 +339,15 @@ class GeradorCrachas(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             new = edit.text().strip()
             if new:
-                self.names[idx] = new
+                self.docx_service.names[idx] = new
                 self._refresh()
 
     def _delete_name(self, idx):
-        del self.names[idx]
+        del self.docx_service.names[idx]
         self._refresh()
 
     def _clear_all(self):
-        if not self.names:
+        if not self.docx_service.names:
             return
         if (
             QMessageBox.question(
@@ -359,7 +358,7 @@ class GeradorCrachas(QMainWindow):
             )
             == QMessageBox.StandardButton.Yes
         ):
-            self.names.clear()
+            self.docx_service.names.clear()
             self._refresh()
 
     def _refresh(self):
@@ -367,12 +366,12 @@ class GeradorCrachas(QMainWindow):
             item = self.scroll_lay.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        if not self.names:
+        if not self.docx_service.names:
             self._show_empty()
             self.count_lbl.setText("0 nomes adicionados")
             self.page_count_lbl.setText("")
             return
-        n = len(self.names)
+        n = len(self.docx_service.names)
         pages = (n + CRACHAS_POR_PAGINA - 1) // CRACHAS_POR_PAGINA
         self.count_lbl.setText(
             f"{n} nome{'s' if n!=1 else ''} adicionado{'s' if n!=1 else ''}"
@@ -384,7 +383,11 @@ class GeradorCrachas(QMainWindow):
             start = p * CRACHAS_POR_PAGINA
             end = min(start + CRACHAS_POR_PAGINA, n)
             grp = PageGroup(
-                p + 1, self.names[start:end], start, self._edit_name, self._delete_name
+                p + 1,
+                self.docx_service.names[start:end],
+                start,
+                self._edit_name,
+                self._delete_name,
             )
             self.scroll_lay.insertWidget(self.scroll_lay.count() - 1, grp)
 
@@ -410,7 +413,7 @@ class GeradorCrachas(QMainWindow):
         self.scroll_lay.insertWidget(0, w)
 
     def _generate(self):
-        if not self.names:
+        if not self.docx_service.names:
             QMessageBox.warning(
                 self, "Lista vazia", "Adicione pelo menos um nome antes de gerar."
             )
@@ -433,12 +436,12 @@ class GeradorCrachas(QMainWindow):
         if not save_path:
             return
         try:
-            docx_bytes = self.docx_service.gerar_docx_de_modelo(
-                self.templates[color], self.names
+            docx_bytes = self.docx_service.generate_document(
+                self.templates[color], self.docx_service.names
             )
             with open(save_path, "wb") as f:
                 f.write(docx_bytes)
-            n = len(self.names)
+            n = len(self.docx_service.names)
             pages = (n + CRACHAS_POR_PAGINA - 1) // CRACHAS_POR_PAGINA
             QMessageBox.information(
                 self,
