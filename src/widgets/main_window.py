@@ -29,7 +29,6 @@ from styles.constants import (
     BG_MAIN,
     BG_SIDEBAR,
     BORDER,
-    COLOR_DOTS,
     COLOR_OPTIONS,
     DANGER,
     SUCCESS,
@@ -176,12 +175,6 @@ class GeradorCrachas(QMainWindow):
         )
         self.radio_group.addButton(rb)
         rl.addWidget(rb, 1)
-
-        dot = QLabel("●")
-        dot.setFont(QFont("Segoe UI", 16))
-        dot.setStyleSheet(f"color:{COLOR_DOTS[color]};padding-right:4px;")
-        dot.setFixedWidth(22)
-        rl.addWidget(dot)
 
         return row
 
