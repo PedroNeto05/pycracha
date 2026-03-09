@@ -14,12 +14,6 @@ from styles.constants import (
 
 class NameCard(QFrame):
     def __init__(self, name: str, position: int, on_edit, on_delete, parent=None):
-        """
-        name      : texto a exibir
-        position  : número de exibição (1-based)
-        on_edit   : callable acionado ao clicar em Editar
-        on_delete : callable acionado ao clicar em Apagar
-        """
         super().__init__(parent)
         self.setObjectName("NameCard")
         self.setStyleSheet(f"QFrame#NameCard:hover{{border-color:{ACCENT_DARK};}}")

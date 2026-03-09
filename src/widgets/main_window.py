@@ -36,6 +36,7 @@ from styles.constants import (
     TEXT_PRIMARY,
 )
 from widgets.page_group import PageGroup
+from widgets.spread_sheet_import_dialog import SpreadsheetImportDialog
 
 
 class GeradorCrachas(QMainWindow):
@@ -49,7 +50,6 @@ class GeradorCrachas(QMainWindow):
         self._build_ui()
         self.setStyleSheet(f"QMainWindow{{background:{BG_MAIN};}}")
 
-    # ── Construção da UI ─────────────────────────────────────────────────────
     def _build_ui(self):
         c = QWidget()
         self.setCentralWidget(c)
@@ -107,6 +107,17 @@ class GeradorCrachas(QMainWindow):
         lay.addWidget(self._sep())
         lay.addWidget(self._build_templates_group())
         lay.addWidget(self._build_add_name_group())
+        lay.addWidget(
+            self._btn(
+                "Importar Planilha",
+                36,
+                f"QPushButton{{background:{BG_MAIN};color:{ACCENT};"
+                f"border:1px solid {ACCENT};border-radius:8px;"
+                f"border:none;font-size:9pt;}}"
+                f"QPushButton:hover{{background:{ACCENT_LIGHT};}}",
+                self._import_spreadsheet,
+            )
+        )
 
         self.count_lbl = QLabel("0 nomes adicionados")
         self.count_lbl.setFont(QFont("Segoe UI", 9))
@@ -233,6 +244,9 @@ class GeradorCrachas(QMainWindow):
         )
         return grp
 
+    def _build_add_sheet_group(self):
+        pass
+
     def _right_panel(self) -> QWidget:
         panel = QWidget()
         panel.setStyleSheet(f"background:{BG_MAIN};")
@@ -280,14 +294,12 @@ class GeradorCrachas(QMainWindow):
         self._show_empty()
         return panel
 
-    # ── Helpers de seleção ───────────────────────────────────────────────────
     def _selected_color(self) -> str:
         for btn in self.radio_group.buttons():
             if btn.isChecked():
                 return btn.text().strip()
         return "Verde"
 
-    # ── Ações — delegam toda lógica ao DocxService ───────────────────────────
     def _load_template(self, color: str):
         path, _ = QFileDialog.getOpenFileName(
             self, f"Carregar modelo {color}", "", "Word Document (*.docx)"
@@ -414,7 +426,6 @@ class GeradorCrachas(QMainWindow):
                 self, "Erro ao gerar arquivo", f"Ocorreu um erro:\n{str(e)}"
             )
 
-    # ── Atualização da lista visual ──────────────────────────────────────────
     def _refresh(self):
         while self.scroll_lay.count() > 1:
             item = self.scroll_lay.takeAt(0)
@@ -467,3 +478,22 @@ class GeradorCrachas(QMainWindow):
         vl.addWidget(msg)
 
         self.scroll_lay.insertWidget(0, w)
+
+    def _import_spreadsheet(self):
+        dlg = SpreadsheetImportDialog(
+            get_columns_fn=self.docx_service.get_columns_from_spreadsheet,
+            parent=self,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        try:
+            self.docx_service.import_from_spreadsheet(
+                file_path=dlg.file_path,
+                name_column=dlg.name_column,
+                surname_column=dlg.surname_column,
+                abbreviate=dlg.abbreviate,
+            )
+            self._refresh()
+        except ValueError as e:
+            QMessageBox.critical(self, "Erro na importação", str(e))

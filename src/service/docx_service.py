@@ -2,6 +2,7 @@ import copy
 import io
 import zipfile
 
+import pandas as pd
 from lxml import etree
 
 from service.constants import CRACHAS_POR_PAGINA, W
@@ -11,7 +12,6 @@ class DocxService:
     def __init__(self):
         self._names: list[str] = []
 
-    # ── Gerenciamento de nomes ───────────────────────────────────────────────
     def add_name(self, name: str):
         self._names.append(name)
 
@@ -24,7 +24,6 @@ class DocxService:
     def clear_names(self):
         self._names.clear()
 
-    # ── Consultas ────────────────────────────────────────────────────────────
     @property
     def names(self) -> list[str]:
         return self._names
@@ -47,9 +46,7 @@ class DocxService:
     def get_global_index(self, page_idx: int) -> int:
         return page_idx * CRACHAS_POR_PAGINA
 
-    # ── Validação do template ────────────────────────────────────────────────
     def validate_template(self, path: str):
-        """Valida o arquivo modelo. Lança ValueError com mensagem legível se inválido."""
         try:
             with zipfile.ZipFile(path, "r") as z:
                 if "word/document.xml" not in z.namelist():
@@ -83,7 +80,6 @@ class DocxService:
                 "Verifique se é o arquivo correto."
             )
 
-    # ── Geração do documento ─────────────────────────────────────────────────
     def generate_document(self, template_path: str) -> bytes:
         all_files = self._read_zip(template_path)
         orig_tree = self._parse_xml(all_files)
@@ -159,3 +155,71 @@ class DocxService:
             for fname, data in all_files.items():
                 zout.writestr(fname, new_xml if fname == "word/document.xml" else data)
         return buf.getvalue()
+
+    def import_from_spreadsheet(
+        self,
+        file_path: str,
+        name_column: str,
+        surname_column: str | None,
+        abbreviate: bool,
+    ):
+        df = self._read_spreadsheet(file_path)
+        self._validate_columns(df, name_column, surname_column)
+
+        for _, row in df.iterrows():
+            full_name = self._build_full_name(row, name_column, surname_column)
+            if not full_name:
+                continue
+            if abbreviate:
+                full_name = self._abbreviate_name(full_name)
+            self._names.append(full_name)
+
+    def _read_spreadsheet(self, file_path: str) -> "pd.DataFrame":
+        if file_path.endswith(".csv"):
+            return pd.read_csv(file_path)
+        return pd.read_excel(file_path)
+
+    def _validate_columns(
+        self,
+        df: "pd.DataFrame",
+        name_column: str,
+        surname_column: str | None,
+    ):
+        if name_column not in df.columns:
+            raise ValueError(
+                f'Coluna de nome "{name_column}" não encontrada na planilha.\n'
+                f"Colunas disponíveis: {', '.join(df.columns)}"
+            )
+        if surname_column and surname_column not in df.columns:
+            raise ValueError(
+                f'Coluna de sobrenome "{surname_column}" não encontrada na planilha.\n'
+                f"Colunas disponíveis: {', '.join(df.columns)}"
+            )
+
+    def _build_full_name(
+        self,
+        row: "pd.Series",
+        name_column: str,
+        surname_column: str | None,
+    ) -> str:
+        name = str(row[name_column]).strip() if pd.notna(row[name_column]) else ""
+        if not name:
+            return ""
+        if surname_column:
+            surname = (
+                str(row[surname_column]).strip()
+                if pd.notna(row[surname_column])
+                else ""
+            )
+            return f"{name} {surname}".strip()
+        return name
+
+    def _abbreviate_name(self, name: str) -> str:
+        parts = name.split()
+        if len(parts) <= 2:
+            return name
+        return f"{parts[0]} {parts[-1]}"
+
+    def get_columns_from_spreadsheet(self, file_path: str) -> list[str]:
+        df = self._read_spreadsheet(file_path)
+        return list(df.columns)
