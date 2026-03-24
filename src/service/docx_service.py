@@ -211,8 +211,11 @@ class DocxService:
                 if pd.notna(row[surname_column])
                 else ""
             )
-            return f"{name} {surname}".strip()
-        return name
+            full = f"{name} {surname}".strip()
+        else:
+            full = name
+
+        return full.title()
 
     def _abbreviate_name(self, name: str) -> str:
         parts = name.split()
