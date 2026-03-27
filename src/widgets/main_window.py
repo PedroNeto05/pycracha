@@ -482,6 +482,7 @@ class GeradorCrachas(QMainWindow):
     def _import_spreadsheet(self):
         dlg = SpreadsheetImportDialog(
             get_columns_fn=self.docx_service.get_columns_from_spreadsheet,
+            get_filterable_columns_fn=self.docx_service.get_filterable_columns,
             parent=self,
         )
         if dlg.exec() != QDialog.DialogCode.Accepted:
@@ -493,6 +494,7 @@ class GeradorCrachas(QMainWindow):
                 name_column=dlg.name_column,
                 surname_column=dlg.surname_column,
                 abbreviate=dlg.abbreviate,
+                filters=dlg.active_filters,
             )
             self._refresh()
         except ValueError as e:

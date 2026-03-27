@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from typing import cast
 
 from styles.constants import (
     ACCENT,
@@ -28,27 +29,39 @@ from styles.constants import (
     TEXT_MUTED,
     TEXT_PRIMARY,
 )
+from widgets.filter_row import FilterRow
 
 
 class SpreadsheetImportDialog(QDialog):
-
-    def __init__(self, get_columns_fn, parent=None):
+    def __init__(self, get_columns_fn, get_filterable_columns_fn, parent=None):
+        """
+        get_columns_fn            : callable(file_path) -> list[str]
+        get_filterable_columns_fn : callable(file_path) -> list[str]
+        """
         super().__init__(parent)
         self._get_columns = get_columns_fn
+        self._get_filterable_columns = get_filterable_columns_fn
         self._file_path = ""
+        self._filterable_columns: list[str] = []
+        self._filter_rows: list[FilterRow] = []
 
+        # Widgets
         self._lbl_file: QLabel = QLabel()
         self._combo_name: QComboBox = QComboBox()
         self._combo_surname: QComboBox = QComboBox()
         self._chk_abbreviate: QCheckBox = QCheckBox()
         self._btn_ok: QPushButton = QPushButton()
         self._columns_widget: QWidget = QWidget()
+        self._filters_widget: QWidget = QWidget()
+        self._filters_layout: QVBoxLayout = QVBoxLayout()
+        self._lbl_no_filters: QLabel = QLabel()
 
         self.setWindowTitle("Importar Planilha")
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(500)
         self.setStyleSheet(f"background:{BG_SIDEBAR};color:{TEXT_PRIMARY};")
         self._build_ui()
 
+    # ── Propriedades expostas ────────────────────────────────────────────────
     @property
     def file_path(self) -> str:
         return self._file_path
@@ -66,6 +79,11 @@ class SpreadsheetImportDialog(QDialog):
     def abbreviate(self) -> bool:
         return self._chk_abbreviate.isChecked()
 
+    @property
+    def active_filters(self) -> list[dict[str, str]]:
+        return [r.as_dict() for r in self._filter_rows if r.value]
+
+    # ── Construção da UI ─────────────────────────────────────────────────────
     def _build_ui(self):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 24, 24, 20)
@@ -75,11 +93,12 @@ class SpreadsheetImportDialog(QDialog):
         lay.addWidget(self._build_separator())
         lay.addWidget(self._build_upload_section())
         lay.addWidget(self._build_columns_section())
+        lay.addWidget(self._build_filters_section())
         lay.addWidget(self._build_options_section())
         lay.addWidget(self._build_separator())
         lay.addWidget(self._build_buttons())
 
-        self._set_columns_enabled(False)
+        self._set_sections_enabled(False)
 
     def _build_title(self) -> QWidget:
         w = QWidget()
@@ -87,7 +106,7 @@ class SpreadsheetImportDialog(QDialog):
         vl.setContentsMargins(0, 0, 0, 0)
         vl.setSpacing(2)
 
-        title = QLabel("Importar nomes de planilha")
+        title = QLabel("📊 Importar nomes de planilha")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{TEXT_PRIMARY};")
         vl.addWidget(title)
@@ -130,7 +149,7 @@ class SpreadsheetImportDialog(QDialog):
         self._lbl_file.setMinimumHeight(34)
         rl.addWidget(self._lbl_file, 1)
 
-        btn_select = QPushButton("Selecionar")
+        btn_select = QPushButton("📂 Selecionar")
         btn_select.setFixedSize(110, 34)
         btn_select.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_select.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
@@ -205,6 +224,51 @@ class SpreadsheetImportDialog(QDialog):
 
         return w, combo
 
+    def _build_filters_section(self) -> QWidget:
+        self._filters_widget = QWidget()
+        vl = QVBoxLayout(self._filters_widget)
+        vl.setContentsMargins(0, 0, 0, 0)
+        vl.setSpacing(8)
+
+        # Cabeçalho da seção
+        header = QWidget()
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(0, 0, 0, 0)
+
+        lbl = QLabel("Filtros")
+        lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        lbl.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        hl.addWidget(lbl, 1)
+
+        btn_add = QPushButton("＋ Adicionar filtro")
+        btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_add.setFixedHeight(26)
+        btn_add.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        btn_add.setStyleSheet(
+            f"QPushButton{{background:{ACCENT_LIGHT};color:{ACCENT};"
+            f"border:1px solid {ACCENT};border-radius:5px;padding:0 8px;}}"
+            f"QPushButton:hover{{background:{ACCENT};color:white;}}"
+        )
+        btn_add.clicked.connect(self._add_filter)
+        hl.addWidget(btn_add)
+
+        vl.addWidget(header)
+
+        # Container das FilterRows
+        filters_container = QWidget()
+        self._filters_layout = QVBoxLayout(filters_container)
+        self._filters_layout.setContentsMargins(0, 0, 0, 0)
+        self._filters_layout.setSpacing(4)
+        vl.addWidget(filters_container)
+
+        # Hint quando não há filtros
+        self._lbl_no_filters = QLabel("Nenhum filtro adicionado.")
+        self._lbl_no_filters.setFont(QFont("Segoe UI", 8))
+        self._lbl_no_filters.setStyleSheet(f"color:{TEXT_MUTED};")
+        vl.addWidget(self._lbl_no_filters)
+
+        return self._filters_widget
+
     def _build_options_section(self) -> QWidget:
         w = QWidget()
         vl = QVBoxLayout(w)
@@ -220,7 +284,7 @@ class SpreadsheetImportDialog(QDialog):
         self._chk_abbreviate.setFont(QFont("Segoe UI", 10))
         self._chk_abbreviate.setStyleSheet(f"color:{TEXT_PRIMARY};")
         self._chk_abbreviate.setToolTip(
-            'Ex: "Carlos da Silva de Oliveira" → "Carlos Oliveira"'
+            'Ex: "Pedro Nascimento de Paiva Fernandes Neto" → "Pedro Neto"'
         )
         vl.addWidget(self._chk_abbreviate)
 
@@ -236,8 +300,10 @@ class SpreadsheetImportDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
 
-        self._btn_ok = btns.button(QDialogButtonBox.StandardButton.Ok)
-        self._btn_ok.setText("Importar nomes")
+        self._btn_ok = cast(
+            QPushButton, btns.button(QDialogButtonBox.StandardButton.Ok)
+        )
+        self._btn_ok.setText("✅ Importar nomes")
         self._btn_ok.setFixedHeight(36)
         self._btn_ok.setEnabled(False)
         self._btn_ok.setStyleSheet(
@@ -247,7 +313,9 @@ class SpreadsheetImportDialog(QDialog):
             f"QPushButton:disabled{{background:#B0BEC5;}}"
         )
 
-        btn_cancel = btns.button(QDialogButtonBox.StandardButton.Cancel)
+        btn_cancel = cast(
+            QPushButton, btns.button(QDialogButtonBox.StandardButton.Cancel)
+        )
         btn_cancel.setText("Cancelar")
         btn_cancel.setFixedHeight(36)
         btn_cancel.setStyleSheet(
@@ -260,6 +328,7 @@ class SpreadsheetImportDialog(QDialog):
         btns.rejected.connect(self.reject)
         return btns
 
+    # ── Interações ───────────────────────────────────────────────────────────
     def _select_file(self):
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -271,7 +340,8 @@ class SpreadsheetImportDialog(QDialog):
             return
 
         try:
-            columns = self._get_columns(path)
+            all_columns = self._get_columns(path)
+            self._filterable_columns = self._get_filterable_columns(path)
         except Exception as e:
             QMessageBox.critical(self, "Erro ao ler planilha", str(e))
             return
@@ -283,8 +353,9 @@ class SpreadsheetImportDialog(QDialog):
             f"border:1px solid {SUCCESS};border-radius:6px;padding:6px 10px;"
         )
 
-        self._populate_combos(columns)
-        self._set_columns_enabled(True)
+        self._populate_combos(all_columns)
+        self._clear_filters()
+        self._set_sections_enabled(True)
         self._btn_ok.setEnabled(True)
 
     def _populate_combos(self, columns: list[str]):
@@ -295,8 +366,36 @@ class SpreadsheetImportDialog(QDialog):
         self._combo_surname.addItem("— nenhum —")
         self._combo_surname.addItems(columns)
 
-    def _set_columns_enabled(self, enabled: bool):
+    def _add_filter(self):
+        if not self._filterable_columns:
+            return
+        row = FilterRow(
+            columns=self._filterable_columns,
+            on_remove=lambda: self._remove_filter(row),
+        )
+        self._filter_rows.append(row)
+        self._filters_layout.addWidget(row)
+        self._update_no_filters_hint()
+
+    def _remove_filter(self, row: FilterRow):
+        self._filter_rows.remove(row)
+        self._filters_layout.removeWidget(row)
+        row.deleteLater()
+        self._update_no_filters_hint()
+
+    def _clear_filters(self):
+        for row in self._filter_rows:
+            self._filters_layout.removeWidget(row)
+            row.deleteLater()
+        self._filter_rows.clear()
+        self._update_no_filters_hint()
+
+    def _update_no_filters_hint(self):
+        self._lbl_no_filters.setVisible(len(self._filter_rows) == 0)
+
+    def _set_sections_enabled(self, enabled: bool):
         self._columns_widget.setEnabled(enabled)
+        self._filters_widget.setEnabled(enabled)
 
     def _on_accept(self):
         if (

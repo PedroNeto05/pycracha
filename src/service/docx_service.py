@@ -1,4 +1,5 @@
 import copy
+import unicodedata
 import io
 import zipfile
 
@@ -6,6 +7,8 @@ import pandas as pd
 from lxml import etree
 
 from service.constants import CRACHAS_POR_PAGINA, W
+
+_EXCLUDED_COLUMN_KEYWORDS = {"nome", "telefone", "email", "foto", "data", "endereço"}
 
 
 class DocxService:
@@ -162,9 +165,13 @@ class DocxService:
         name_column: str,
         surname_column: str | None,
         abbreviate: bool,
+        filters: list[dict[str, str]] | None = None,
     ):
         df = self._read_spreadsheet(file_path)
         self._validate_columns(df, name_column, surname_column)
+
+        if filters:
+            df = self.apply_filters(df, filters)
 
         for _, row in df.iterrows():
             full_name = self._build_full_name(row, name_column, surname_column)
@@ -172,7 +179,7 @@ class DocxService:
                 continue
             if abbreviate:
                 full_name = self._abbreviate_name(full_name)
-            self._names.append(full_name)
+            self._names.append(full_name.title())
 
     def _read_spreadsheet(self, file_path: str) -> "pd.DataFrame":
         if file_path.endswith(".csv"):
@@ -226,3 +233,39 @@ class DocxService:
     def get_columns_from_spreadsheet(self, file_path: str) -> list[str]:
         df = self._read_spreadsheet(file_path)
         return list(df.columns)
+
+    def get_filterable_columns(self, file_path: str) -> list[str]:
+        all_columns = self.get_columns_from_spreadsheet(file_path)
+        return [
+            col
+            for col in all_columns
+            if not any(kw in col.lower() for kw in _EXCLUDED_COLUMN_KEYWORDS)
+        ]
+
+    def apply_filters(
+        self,
+        df: "pd.DataFrame",
+        filters: list[dict[str, str]],
+    ) -> "pd.DataFrame":
+        """
+        Aplica filtros aditivos (AND) com normalização.
+        Recebe o df já lido para evitar reler o arquivo.
+        """
+        for f in filters:
+            column = f["column"]
+            term = self._normalize(f["value"])
+
+            if column not in df.columns or not term:
+                continue
+
+            df = df[df[column].apply(lambda cell: term in self._normalize(str(cell)))]
+
+        return df
+
+    def _normalize(self, text: str) -> str:
+        """Lowercase + remove acentos + remove espaços."""
+        text = text.lower().strip()
+        text = unicodedata.normalize("NFD", text)
+        text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+        text = text.replace(" ", "")
+        return text
