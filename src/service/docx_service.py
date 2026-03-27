@@ -174,12 +174,17 @@ class DocxService:
             df = self.apply_filters(df, filters)
 
         for _, row in df.iterrows():
-            full_name = self._build_full_name(row, name_columns)
-            if not full_name:
-                continue
-            if abbreviate:
-                full_name = self._abbreviate_name(full_name)
-            self._names.append(full_name.title())
+            for col in name_columns:
+                val = str(row[col]).strip() if pd.notna(row[col]) else ""
+
+                # Pula se a célula estiver vazia
+                if not val:
+                    continue
+
+                if abbreviate:
+                    val = self._abbreviate_name(val)
+
+                self._names.append(val.title())
 
     def _read_spreadsheet(self, file_path: str) -> "pd.DataFrame":
         if file_path.endswith(".csv"):
@@ -203,22 +208,6 @@ class DocxService:
                     f'Coluna "{col}" não encontrada na planilha.\n'
                     f"Colunas disponíveis: {', '.join(df.columns)}"
                 )
-
-    def _build_full_name(
-        self,
-        row: "pd.Series",
-        name_columns: list[str],
-    ) -> str:
-        parts = []
-        for col in name_columns:
-            val = str(row[col]).strip() if pd.notna(row[col]) else ""
-            if val:
-                parts.append(val)
-
-        if not parts:
-            return ""
-
-        return " ".join(parts).title()
 
     def _abbreviate_name(self, name: str) -> str:
         parts = name.split()
