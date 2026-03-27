@@ -1,4 +1,5 @@
 import copy
+import re
 import unicodedata
 import io
 import zipfile
@@ -182,8 +183,11 @@ class DocxService:
 
     def _read_spreadsheet(self, file_path: str) -> "pd.DataFrame":
         if file_path.endswith(".csv"):
-            return pd.read_csv(file_path)
-        return pd.read_excel(file_path)
+            df = pd.read_csv(file_path)
+        else:
+            df = pd.read_excel(file_path)
+
+        return self._consolidate_columns(df)
 
     def _validate_columns(
         self,
@@ -192,7 +196,7 @@ class DocxService:
     ):
         if not name_columns:
             raise ValueError("Nenhuma coluna de nome foi selecionada.")
-            
+
         for col in name_columns:
             if col not in df.columns:
                 raise ValueError(
@@ -210,7 +214,7 @@ class DocxService:
             val = str(row[col]).strip() if pd.notna(row[col]) else ""
             if val:
                 parts.append(val)
-                
+
         if not parts:
             return ""
 
@@ -261,3 +265,31 @@ class DocxService:
         text = "".join(c for c in text if unicodedata.category(c) != "Mn")
         text = text.replace(" ", "")
         return text
+
+    def _consolidate_columns(self, df: "pd.DataFrame") -> "pd.DataFrame":
+        """
+        Agrupa colunas duplicadas geradas pelo pandas (ex: Equipe, Equipe.1, Equipe.2)
+        e consolida os valores pegando o primeiro valor não nulo da linha.
+        """
+        base_names = {}
+        for col in df.columns:
+            # Remove o sufixo '.n' (ex: .1, .2, .12) do final do nome da coluna
+            base_name = re.sub(r"\.\d+$", "", str(col))
+            if base_name not in base_names:
+                base_names[base_name] = []
+            base_names[base_name].append(col)
+
+        new_df = pd.DataFrame()
+        for base_name, cols in base_names.items():
+            if len(cols) == 1:
+                # Se não tem duplicata, apenas copia a coluna original
+                new_df[base_name] = df[cols[0]]
+            else:
+                # Se tem duplicata, usamos combine_first iterativamente para
+                # preencher os vazios com o primeiro valor não nulo encontrado
+                consolidated = df[cols[0]]
+                for col in cols[1:]:
+                    consolidated = consolidated.combine_first(df[col])
+                new_df[base_name] = consolidated
+
+        return new_df
