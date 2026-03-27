@@ -47,8 +47,10 @@ class SpreadsheetImportDialog(QDialog):
 
         # Widgets
         self._lbl_file: QLabel = QLabel()
-        self._combo_name: QComboBox = QComboBox()
-        self._combo_surname: QComboBox = QComboBox()
+        self._all_columns: list[str] = []
+        self._column_rows: list[QWidget] = []
+        self._column_combos: list[QComboBox] = []
+        self._columns_layout: QVBoxLayout = QVBoxLayout()
         self._chk_abbreviate: QCheckBox = QCheckBox()
         self._btn_ok: QPushButton = QPushButton()
         self._columns_widget: QWidget = QWidget()
@@ -67,13 +69,10 @@ class SpreadsheetImportDialog(QDialog):
         return self._file_path
 
     @property
-    def name_column(self) -> str:
-        return self._combo_name.currentText()
-
-    @property
-    def surname_column(self) -> str | None:
-        text = self._combo_surname.currentText()
-        return text if text != "— nenhum —" else None
+    def name_columns(self) -> list[str]:
+        return [
+            combo.currentText() for combo in self._column_combos if combo.currentText()
+        ]
 
     @property
     def abbreviate(self) -> bool:
@@ -168,24 +167,38 @@ class SpreadsheetImportDialog(QDialog):
         self._columns_widget = QWidget()
         vl = QVBoxLayout(self._columns_widget)
         vl.setContentsMargins(0, 0, 0, 0)
-        vl.setSpacing(12)
+        vl.setSpacing(8)
 
-        section_lbl = QLabel("Mapeamento de colunas")
-        section_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        section_lbl.setStyleSheet(f"color:{TEXT_PRIMARY};")
-        vl.addWidget(section_lbl)
+        # Cabeçalho da seção
+        header = QWidget()
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(0, 0, 0, 0)
 
-        name_row, self._combo_name = self._build_combo_row(
-            label="Coluna de nome  *",
-            tooltip="Obrigatório",
+        lbl = QLabel("Mapeamento de colunas para o nome")
+        lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        lbl.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        hl.addWidget(lbl, 1)
+
+        btn_add = QPushButton("＋ Adicionar coluna")
+        btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_add.setFixedHeight(26)
+        btn_add.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        btn_add.setStyleSheet(
+            f"QPushButton{{background:{ACCENT_LIGHT};color:{ACCENT};"
+            f"border:1px solid {ACCENT};border-radius:5px;padding:0 8px;}}"
+            f"QPushButton:hover{{background:{ACCENT};color:white;}}"
         )
-        surname_row, self._combo_surname = self._build_combo_row(
-            label="Coluna de sobrenome",
-            tooltip="Opcional — deixe em '— nenhum —' para ignorar",
-        )
+        btn_add.clicked.connect(self._add_column_row)
+        hl.addWidget(btn_add)
 
-        vl.addWidget(name_row)
-        vl.addWidget(surname_row)
+        vl.addWidget(header)
+
+        # Container das linhas dinâmicas de colunas
+        cols_container = QWidget()
+        self._columns_layout = QVBoxLayout(cols_container)
+        self._columns_layout.setContentsMargins(0, 0, 0, 0)
+        self._columns_layout.setSpacing(4)
+        vl.addWidget(cols_container)
 
         return self._columns_widget
 
@@ -359,12 +372,14 @@ class SpreadsheetImportDialog(QDialog):
         self._btn_ok.setEnabled(True)
 
     def _populate_combos(self, columns: list[str]):
-        self._combo_name.clear()
-        self._combo_name.addItems(columns)
-
-        self._combo_surname.clear()
-        self._combo_surname.addItem("— nenhum —")
-        self._combo_surname.addItems(columns)
+        self._all_columns = columns
+        
+        # Limpa as seleções anteriores caso o usuário carregue outro arquivo
+        for row, combo in zip(list(self._column_rows), list(self._column_combos)):
+            self._remove_column_row(row, combo)
+            
+        # Adiciona a primeira linha obrigatória
+        self._add_column_row()
 
     def _add_filter(self):
         if not self._filterable_columns:
@@ -398,14 +413,55 @@ class SpreadsheetImportDialog(QDialog):
         self._filters_widget.setEnabled(enabled)
 
     def _on_accept(self):
-        if (
-            self.surname_column is not None
-            and self._combo_name.currentText() == self._combo_surname.currentText()
-        ):
-            QMessageBox.warning(
-                self,
-                "Colunas iguais",
-                "A coluna de nome e sobrenome não podem ser a mesma.",
-            )
+        if not self.name_columns:
+            QMessageBox.warning(self, "Aviso", "Selecione pelo menos uma coluna para formar o nome.")
             return
         self.accept()
+
+    def _add_column_row(self):
+        if not self._all_columns:
+            return
+
+        row_widget = QWidget()
+        hl = QHBoxLayout(row_widget)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(6)
+
+        combo = QComboBox()
+        combo.setFixedHeight(32)
+        combo.setFont(QFont("Segoe UI", 9))
+        combo.setStyleSheet(
+            f"QComboBox{{border:1px solid {BORDER};border-radius:6px;"
+            f"padding:0 8px;background:white;color:{TEXT_PRIMARY};}}"
+            f"QComboBox:focus{{border-color:{ACCENT};}}"
+            f"QComboBox::drop-down{{border:none;width:20px;}}"
+        )
+        combo.addItems(self._all_columns)
+        hl.addWidget(combo, 1)
+
+        btn_remove = QPushButton("✕")
+        btn_remove.setFixedSize(32, 32)
+        btn_remove.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_remove.setToolTip("Remover coluna")
+        btn_remove.setStyleSheet(
+            f"QPushButton{{background:#FDE8E8;color:{DANGER};"
+            f"border:1px solid {DANGER};border-radius:6px;font-weight:bold;}}"
+            f"QPushButton:hover{{background:{DANGER};color:white;}}"
+        )
+        btn_remove.clicked.connect(lambda: self._remove_column_row(row_widget, combo))
+
+        # Oculta o botão de remover se for a primeira/única coluna, garantindo que haja pelo menos uma.
+        if len(self._column_rows) == 0:
+            btn_remove.setVisible(False)
+
+        hl.addWidget(btn_remove)
+
+        self._columns_layout.addWidget(row_widget)
+        self._column_rows.append(row_widget)
+        self._column_combos.append(combo)
+
+    def _remove_column_row(self, row_widget: QWidget, combo: QComboBox):
+        self._columns_layout.removeWidget(row_widget)
+        self._column_rows.remove(row_widget)
+        self._column_combos.remove(combo)
+        row_widget.deleteLater()

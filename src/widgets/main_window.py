@@ -491,8 +491,7 @@ class GeradorCrachas(QMainWindow):
         try:
             self.docx_service.import_from_spreadsheet(
                 file_path=dlg.file_path,
-                name_column=dlg.name_column,
-                surname_column=dlg.surname_column,
+                name_columns=dlg.name_columns,  # Alterado para usar a lista
                 abbreviate=dlg.abbreviate,
                 filters=dlg.active_filters,
             )

@@ -162,19 +162,18 @@ class DocxService:
     def import_from_spreadsheet(
         self,
         file_path: str,
-        name_column: str,
-        surname_column: str | None,
+        name_columns: list[str],
         abbreviate: bool,
         filters: list[dict[str, str]] | None = None,
     ):
         df = self._read_spreadsheet(file_path)
-        self._validate_columns(df, name_column, surname_column)
+        self._validate_columns(df, name_columns)
 
         if filters:
             df = self.apply_filters(df, filters)
 
         for _, row in df.iterrows():
-            full_name = self._build_full_name(row, name_column, surname_column)
+            full_name = self._build_full_name(row, name_columns)
             if not full_name:
                 continue
             if abbreviate:
@@ -189,40 +188,33 @@ class DocxService:
     def _validate_columns(
         self,
         df: "pd.DataFrame",
-        name_column: str,
-        surname_column: str | None,
+        name_columns: list[str],
     ):
-        if name_column not in df.columns:
-            raise ValueError(
-                f'Coluna de nome "{name_column}" não encontrada na planilha.\n'
-                f"Colunas disponíveis: {', '.join(df.columns)}"
-            )
-        if surname_column and surname_column not in df.columns:
-            raise ValueError(
-                f'Coluna de sobrenome "{surname_column}" não encontrada na planilha.\n'
-                f"Colunas disponíveis: {', '.join(df.columns)}"
-            )
+        if not name_columns:
+            raise ValueError("Nenhuma coluna de nome foi selecionada.")
+            
+        for col in name_columns:
+            if col not in df.columns:
+                raise ValueError(
+                    f'Coluna "{col}" não encontrada na planilha.\n'
+                    f"Colunas disponíveis: {', '.join(df.columns)}"
+                )
 
     def _build_full_name(
         self,
         row: "pd.Series",
-        name_column: str,
-        surname_column: str | None,
+        name_columns: list[str],
     ) -> str:
-        name = str(row[name_column]).strip() if pd.notna(row[name_column]) else ""
-        if not name:
+        parts = []
+        for col in name_columns:
+            val = str(row[col]).strip() if pd.notna(row[col]) else ""
+            if val:
+                parts.append(val)
+                
+        if not parts:
             return ""
-        if surname_column:
-            surname = (
-                str(row[surname_column]).strip()
-                if pd.notna(row[surname_column])
-                else ""
-            )
-            full = f"{name} {surname}".strip()
-        else:
-            full = name
 
-        return full.title()
+        return " ".join(parts).title()
 
     def _abbreviate_name(self, name: str) -> str:
         parts = name.split()
