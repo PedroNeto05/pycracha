@@ -136,8 +136,70 @@ class DocxService:
     def _fill_badge(self, badge_tbl, name: str):
         for t_elem in badge_tbl.findall(f".//{W}t"):
             if t_elem.text and "BRASIL" in t_elem.text:
-                t_elem.text = name.upper() if name else ""
+                display_name = name.upper() if name else ""
+                t_elem.text = display_name
+
+                if display_name:
+                    # Calcula a "largura virtual" do nome com base nos pesos das letras
+                    width = self._calculate_virtual_width(display_name)
+
+                    # Define o tamanho da fonte em meios-pontos (Ex: 48 = 24pt, 40 = 20pt)
+                    # Você pode ajustar esses valores conforme o modelo do seu documento!
+                    if width <= 15.0:
+                        font_size = "48"  # 24pt (Padrão)
+                    elif width <= 18.0:
+                        font_size = "40"  # 20pt
+                    elif width <= 22.0:
+                        font_size = "34"  # 17pt
+                    else:
+                        font_size = "28"  # 14pt (Para nomes muito longos)
+
+                    # Acessa a tag "pai" (<w:r>) do elemento de texto (<w:t>)
+                    r_elem = t_elem.getparent()
+
+                    # Busca ou cria a tag de propriedades da fonte (<w:rPr>)
+                    rpr_elem = r_elem.find(f"{W}rPr")
+                    if rpr_elem is None:
+                        rpr_elem = etree.Element(f"{W}rPr")
+                        r_elem.insert(0, rpr_elem)
+
+                    # Aplica o tamanho da fonte (<w:sz w:val="...">)
+                    sz_elem = rpr_elem.find(f"{W}sz")
+                    if sz_elem is None:
+                        sz_elem = etree.Element(f"{W}sz")
+                        rpr_elem.append(sz_elem)
+                    sz_elem.set(f"{W}val", font_size)
+
+                    # Opcional, mas recomendado: forçar também em szCs (Complex Scripts)
+                    szcs_elem = rpr_elem.find(f"{W}szCs")
+                    if szcs_elem is None:
+                        szcs_elem = etree.Element(f"{W}szCs")
+                        rpr_elem.append(szcs_elem)
+                    szcs_elem.set(f"{W}val", font_size)
+
                 break
+
+    def _calculate_virtual_width(self, text: str) -> float:
+        """
+        Calcula a largura aproximada do texto dando pesos diferentes
+        para caracteres finos, normais e largos.
+        """
+        width = 0.0
+        for char in text:
+            c = char.upper()
+            if c in "IÍ1 ":
+                # Caracteres muito finos e espaços
+                width += 0.5
+            elif c in "JLT":
+                # Caracteres levemente mais finos
+                width += 0.8
+            elif c in "MWOQÓÔÕCÇDG":
+                # Caracteres bem largos
+                width += 1.3
+            else:
+                # Caracteres normais (A, B, E, R, etc)
+                width += 1.0
+        return width
 
     def _page_break(self) -> etree._Element:
         pb_p = etree.Element(f"{W}p")
@@ -210,10 +272,82 @@ class DocxService:
                 )
 
     def _abbreviate_name(self, name: str) -> str:
+        preposicoes = {"de", "da", "do", "das", "dos", "e"}
+
         parts = name.split()
+
         if len(parts) <= 2:
             return name
-        return f"{parts[0]} {parts[-1]}"
+
+        primeiros_nomes_compostos = {
+            "ana",
+            "maria",
+            "joão",
+            "joao",
+            "josé",
+            "jose",
+            "luiz",
+            "luís",
+            "luis",
+            "pedro",
+        }
+
+        segundos_nomes_compostos = {
+            "julia",
+            "teresa",
+            "tereza",
+            "giovanna",
+            "helena",
+            "júlia",
+            "clara",
+            "pedro",
+            "lucas",
+            "miguel",
+            "luiza",
+            "mateus",
+            "beatriz",
+            "isadora",
+            "allyce",
+            "antônia",
+            "luíza",
+            "eduarda",
+            "eduardo",
+            "lavínia",
+            "gabriel",
+            "alice",
+            "cecília",
+            "cecilia",
+            "vitória",
+            "vitoria",
+            "henrique",
+            "fernando",
+            "felipe",
+            "augusto",
+            "paulo",
+            "roberto",
+        }
+
+        is_compound = (
+            len(parts) >= 3
+            and parts[0].lower() in primeiros_nomes_compostos
+            and parts[1].lower() in segundos_nomes_compostos
+        )
+
+        if is_compound:
+            first_name = f"{parts[0]} {parts[1]}"
+            remaining_parts = parts[2:]
+        else:
+            first_name = parts[0]
+            remaining_parts = parts[1:]
+
+        valid_surnames = [p for p in remaining_parts if p.lower() not in preposicoes]
+
+        if not valid_surnames:
+            return first_name
+
+        last_surname = valid_surnames[-1]
+
+        return f"{first_name} {last_surname}"
 
     def get_columns_from_spreadsheet(self, file_path: str) -> list[str]:
         df = self._read_spreadsheet(file_path)
